@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     serve_parser = subparsers.add_parser("serve", help="Run the local web service.")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--reload", action="store_true", help="Restart the server when source files change.")
 
     analyze_parser = subparsers.add_parser("analyze", help="Analyze a resume against a job.")
     job_group = analyze_parser.add_mutually_exclusive_group(required=True)
@@ -50,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "serve":
-        return _serve(args.host, args.port)
+        return _serve(args.host, args.port, reload=args.reload)
     if args.command == "analyze":
         return _analyze(args)
     if args.command == "train-profile":
@@ -59,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _serve(host: str, port: int) -> int:
+def _serve(host: str, port: int, *, reload: bool) -> int:
     command = [
         sys.executable,
         "-m",
@@ -69,8 +70,9 @@ def _serve(host: str, port: int) -> int:
         host,
         "--port",
         str(port),
-        "--reload",
     ]
+    if reload:
+        command.append("--reload")
     return subprocess.call(command)
 
 
