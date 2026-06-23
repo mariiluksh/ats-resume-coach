@@ -17,6 +17,8 @@ Never commit:
 - generated model artifacts
 - `.env.local`
 
+Only process resumes you own or have explicit permission to use. The app does not require a resume training corpus to run.
+
 The repo includes `.gitignore` and a pre-commit privacy check to block common mistakes, but you should still review `git status` before every push.
 
 ## Quick start
@@ -36,7 +38,8 @@ Copy `.env.example` to `.env.local` and point it to private local data:
 
 ```bash
 ATS_JOB_PARQUET=/absolute/path/to/job_training_dataset_v1.parquet
-ATS_RESUME_ZIP=/absolute/path/to/cv-train.zip
+# Optional. Use only resumes you have permission to process.
+ATS_AUTHORIZED_RESUME_ZIP=/absolute/path/to/authorized-resumes.zip
 ATS_MODEL_DIR=./models
 ```
 
@@ -57,9 +60,8 @@ This command reads private local datasets and writes ignored model artifacts und
 ```bash
 python -m ats_resume_coach.cli train-profile \
   --jobs-parquet "$ATS_JOB_PARQUET" \
-  --resume-zip "$ATS_RESUME_ZIP" \
+  --authorized-resume-zip "$ATS_AUTHORIZED_RESUME_ZIP" \
   --output models/local_keyword_profile.json
 ```
 
 Do not commit files from `models/`.
-

@@ -7,7 +7,7 @@ Build an open-source service that accepts a job vacancy and an intern/entry-leve
 ## Privacy boundary
 
 - Public repo: source code, tests, docs, UI templates, dependency metadata, privacy checks, empty data/model placeholders.
-- Local-only: `job_training_dataset_v1 (1).parquet`, `cv-train.zip`, extracted resumes, uploaded resumes, job HTML/PDF captures, generated model artifacts, local `.env.*` files.
+- Local-only: `job_training_dataset_v1 (1).parquet`, any authorized resume corpus, extracted resumes, uploaded resumes, job HTML/PDF captures, generated model artifacts, local `.env.*` files.
 - Guardrails:
   - `.gitignore` blocks raw data directories, model artifacts, document formats, parquet/zip exports, CSV/JSONL dumps, and local env files.
   - A pre-commit privacy check blocks staged files from sensitive directories, risky extensions, and large files.
@@ -56,7 +56,7 @@ Build an open-source service that accepts a job vacancy and an intern/entry-leve
    - Keep uploads in memory; no default persistence.
 
 4. Local data/training tools
-   - Add local-only readers for the parquet job export and resume zip.
+   - Add local-only readers for the parquet job export and optional authorized resume zip.
    - Add optional baseline profile trainer using TF-IDF/keyphrase extraction.
    - Save outputs under ignored `models/`.
    - Avoid committing any trained artifacts or derived private examples.
@@ -81,4 +81,3 @@ Build an open-source service that accepts a job vacancy and an intern/entry-leve
 - The first version uses deterministic analysis and optional local TF-IDF profiling, not neural network training.
 - The app does not scrape authenticated job boards. Job URL fetches work for publicly accessible pages.
 - Recommendations are coaching-oriented; the user should review all wording before sending applications.
-

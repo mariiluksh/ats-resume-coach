@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from .analyzer import ResumeAnalyzer
+from .config import AUTHORIZED_RESUME_ZIP_ENV, JOB_PARQUET_ENV, default_model_dir, env_path
 from .ingest import fetch_url_text, read_file_text
 
 
@@ -30,12 +31,30 @@ def main(argv: list[str] | None = None) -> int:
     resume_group.add_argument("--resume-text")
     analyze_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
 
+    train_parser = subparsers.add_parser(
+        "train-profile",
+        help="Build a local aggregate keyword profile from private datasets.",
+    )
+    train_parser.add_argument("--jobs-parquet", type=Path, default=env_path(JOB_PARQUET_ENV))
+    train_parser.add_argument(
+        "--authorized-resume-zip",
+        type=Path,
+        default=env_path(AUTHORIZED_RESUME_ZIP_ENV),
+        help="Optional zip of resumes you have permission to process.",
+    )
+    train_parser.add_argument("--output", type=Path, default=default_model_dir() / "local_keyword_profile.json")
+    train_parser.add_argument("--limit-jobs", type=int, default=5000)
+    train_parser.add_argument("--limit-resumes", type=int, default=1000)
+    train_parser.add_argument("--top-n", type=int, default=120)
+
     args = parser.parse_args(argv)
 
     if args.command == "serve":
         return _serve(args.host, args.port)
     if args.command == "analyze":
         return _analyze(args)
+    if args.command == "train-profile":
+        return _train_profile(args)
     parser.error("Unknown command.")
     return 2
 
@@ -74,6 +93,22 @@ def _analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _train_profile(args: argparse.Namespace) -> int:
+    if not args.jobs_parquet:
+        raise SystemExit(f"Missing --jobs-parquet or {JOB_PARQUET_ENV}.")
+    from .training.profile import train_profile_from_paths
+
+    output = train_profile_from_paths(
+        jobs_parquet=args.jobs_parquet,
+        authorized_resume_zip=args.authorized_resume_zip,
+        output=args.output,
+        limit_jobs=args.limit_jobs,
+        limit_resumes=args.limit_resumes,
+        top_n=args.top_n,
+    )
+    print(f"Wrote local keyword profile to {output}")
+    return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
-
