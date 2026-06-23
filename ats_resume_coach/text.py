@@ -66,8 +66,17 @@ STOPWORDS = {
     "or",
     "our",
     "own",
+    "preferred",
     "please",
     "position",
+    "qualification",
+    "qualifications",
+    "required",
+    "requirement",
+    "requirements",
+    "requiring",
+    "responsibilities",
+    "responsibility",
     "role",
     "she",
     "should",
@@ -97,6 +106,8 @@ STOPWORDS = {
     "work",
     "working",
     "would",
+    "year",
+    "years",
     "you",
     "your",
 }
@@ -178,4 +189,3 @@ def has_email(text: str) -> bool:
 
 def has_phone(text: str) -> bool:
     return bool(PHONE_RE.search(text))
-

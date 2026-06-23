@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ATS Resume Coach</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>ATS Resume Coach</h1>
+            <p>Intern and entry-level resume critique against a target vacancy.</p>
+          </div>
+          <a class="api-link" href="/docs">API docs</a>
+        </header>
+
+        <form class="analysis-form" action="/analyze" method="post" enctype="multipart/form-data">
+          <div class="pane">
+            <h2>Vacancy</h2>
+            <label>
+              Public URL
+              <input type="url" name="job_url" placeholder="https://company.com/jobs/intern">
+            </label>
+            <label>
+              Upload PDF, HTML, or TXT
+              <input type="file" name="job_file" accept=".pdf,.html,.htm,.txt,.md">
+            </label>
+            <label>
+              Or paste text
+              <textarea name="job_text" rows="12" placeholder="Paste the vacancy description"></textarea>
+            </label>
+          </div>
+
+          <div class="pane">
+            <h2>Resume</h2>
+            <label>
+              Upload PDF, DOCX, HTML, or TXT
+              <input type="file" name="resume_file" accept=".pdf,.docx,.html,.htm,.txt,.md">
+            </label>
+            <label>
+              Or paste text
+              <textarea name="resume_text" rows="15" placeholder="Paste resume text"></textarea>
+            </label>
+            <button type="submit">Analyze resume</button>
+          </div>
+        </form>
+
+        {% if error %}
+          <section class="notice error">{{ error }}</section>
+        {% endif %}
+
+        {% if result %}
+          <section class="results">
+            <div class="score-panel">
+              <div>
+                <span class="score">{{ result.overall_score }}</span>
+                <span class="score-unit">/100</span>
+              </div>
+              <div>
+                <h2>{{ result.verdict }}</h2>
+                <p>{{ result.job_title_guess or "Vacancy title not detected" }} - {{ result.role_level }}</p>
+              </div>
+            </div>
+
+            <div class="grid">
+              <section class="result-section">
+                <h3>Score breakdown</h3>
+                <dl class="breakdown">
+                  {% for key, value in result.score_breakdown.items() %}
+                    <div>
+                      <dt>{{ key.replace("_", " ") }}</dt>
+                      <dd>{{ value }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              </section>
+
+              <section class="result-section">
+                <h3>Missing keywords</h3>
+                <div class="chips">
+                  {% for keyword in result.missing_keywords %}
+                    <span>{{ keyword }}</span>
+                  {% else %}
+                    <em>No major keyword gaps detected.</em>
+                  {% endfor %}
+                </div>
+              </section>
+            </div>
+
+            <section class="result-section">
+              <h3>Critique</h3>
+              <ul class="critique">
+                {% for item in result.critique %}
+                  <li>
+                    <span class="severity {{ item.severity }}">{{ item.severity }}</span>
+                    <strong>{{ item.category }}</strong>
+                    <p>{{ item.message }}</p>
+                    <small>{{ item.recommendation }}</small>
+                  </li>
+                {% endfor %}
+              </ul>
+            </section>
+
+            <section class="result-section">
+              <h3>Recommendations</h3>
+              <ol>
+                {% for recommendation in result.recommendations %}
+                  <li>{{ recommendation }}</li>
+                {% endfor %}
+              </ol>
+            </section>
+
+            <section class="result-section">
+              <h3>Bullet templates</h3>
+              <ul>
+                {% for template in result.bullet_rewrite_templates %}
+                  <li><code>{{ template }}</code></li>
+                {% endfor %}
+              </ul>
+            </section>
+          </section>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
+
