@@ -11,7 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .analyzer import ResumeAnalyzer
+from .config import default_model_dir
 from .ingest import IngestError, extract_text_from_bytes, fetch_url_text
+from .local_model import load_optional_local_model
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -30,7 +32,7 @@ def create_app() -> FastAPI:
         name="static",
     )
 
-    analyzer = ResumeAnalyzer()
+    analyzer = ResumeAnalyzer(local_model=load_optional_local_model(default_model_dir() / "local_tfidf"))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -122,4 +124,3 @@ async def _read_upload(upload: UploadFile) -> str:
 
 
 app = create_app()
-

@@ -58,8 +58,10 @@ Build an open-source service that accepts a job vacancy and an intern/entry-leve
 4. Local data/training tools
    - Add local-only readers for the parquet job export and optional authorized resume zip.
    - Add optional baseline profile trainer using TF-IDF/keyphrase extraction.
+   - Add local TF-IDF model training with vectorizer, nearest-neighbor index, and job clusters.
    - Save outputs under ignored `models/`.
    - Avoid committing any trained artifacts or derived private examples.
+   - Require explicit consent before processing any resume corpus.
 
 5. CLI and documentation
    - Add CLI commands for local analysis and optional profile training.

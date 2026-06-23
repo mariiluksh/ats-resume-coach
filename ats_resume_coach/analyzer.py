@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from typing import Any
 
 from .schemas import AnalysisResult, CritiqueItem, ScoreBreakdown
 from .taxonomy import (
@@ -29,6 +30,9 @@ from .text import (
 
 class ResumeAnalyzer:
     """Analyze a resume against a job description."""
+
+    def __init__(self, *, local_model: Any | None = None) -> None:
+        self.local_model = local_model
 
     def analyze(self, job_text: str, resume_text: str) -> AnalysisResult:
         job_text = normalize_text(job_text)
@@ -72,6 +76,9 @@ class ResumeAnalyzer:
             bullet_stats=bullet_stats,
             format_stats=format_stats,
         )
+        model_signals = self._model_signals(job_text=job_text, resume_text=resume_text)
+        if model_signals:
+            self._add_model_critique(critique, model_signals)
 
         recommendations = self._recommendations(critique, missing_keywords, missing_skills, sections)
 
@@ -88,6 +95,7 @@ class ResumeAnalyzer:
             critique=critique,
             recommendations=recommendations,
             bullet_rewrite_templates=self._bullet_templates(missing_keywords, missing_skills),
+            model_signals=model_signals,
         )
 
     def _match_skills(self, text: str) -> dict[str, list[str]]:
@@ -337,6 +345,28 @@ class ResumeAnalyzer:
             )
         return items
 
+    def _model_signals(self, *, job_text: str, resume_text: str) -> dict[str, Any] | None:
+        if not self.local_model:
+            return None
+        try:
+            return self.local_model.signals(job_text=job_text, resume_text=resume_text)
+        except Exception:
+            return None
+
+    def _add_model_critique(self, critique: list[CritiqueItem], model_signals: dict[str, Any]) -> None:
+        missing_terms = model_signals.get("missing_cluster_terms") or []
+        if len(missing_terms) >= 5:
+            critique.append(
+                CritiqueItem(
+                    severity="low",
+                    category="local model",
+                    message="The local job model found cluster terms that are not visible in the resume.",
+                    recommendation="Review these model-derived terms and add only the truthful ones: "
+                    + ", ".join(missing_terms[:8])
+                    + ".",
+                )
+            )
+
     def _recommendations(
         self,
         critique: list[CritiqueItem],
@@ -409,4 +439,3 @@ def _dedupe(values: list[str]) -> list[str]:
             result.append(value)
             seen.add(value)
     return result
-

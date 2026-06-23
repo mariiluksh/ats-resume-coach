@@ -113,6 +113,20 @@
               </ol>
             </section>
 
+            {% if result.model_signals %}
+              <section class="result-section">
+                <h3>Local model signals</h3>
+                <p>Cluster {{ result.model_signals.cluster_id }}</p>
+                <div class="chips">
+                  {% for term in result.model_signals.missing_cluster_terms[:20] %}
+                    <span>{{ term }}</span>
+                  {% else %}
+                    <em>No additional model-derived term gaps detected.</em>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endif %}
+
             <section class="result-section">
               <h3>Bullet templates</h3>
               <ul>
@@ -127,4 +141,3 @@
     </main>
   </body>
 </html>
-

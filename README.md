@@ -65,3 +65,29 @@ python -m ats_resume_coach.cli train-profile \
 ```
 
 Do not commit files from `models/`.
+
+## Local TF-IDF model training
+
+For a stronger local baseline, train a private TF-IDF model from the job parquet:
+
+```bash
+python -m ats_resume_coach.cli train-model \
+  --jobs-parquet "$ATS_JOB_PARQUET" \
+  --output-dir models/local_tfidf
+```
+
+This writes `models/local_tfidf/tfidf_model.joblib` and `models/local_tfidf/metadata.json`. Both are ignored because trained artifacts are derived from private data.
+
+When `models/local_tfidf/` exists, the CLI and web/API analyzer load it automatically and include local model cluster signals in the result.
+
+Resume corpora are optional and require an explicit consent flag:
+
+```bash
+python -m ats_resume_coach.cli train-model \
+  --jobs-parquet "$ATS_JOB_PARQUET" \
+  --authorized-resume-zip "$ATS_AUTHORIZED_RESUME_ZIP" \
+  --confirm-resume-consent \
+  --output-dir models/local_tfidf
+```
+
+Use `--authorized-resume-zip` only for resumes you own or have explicit permission to process.

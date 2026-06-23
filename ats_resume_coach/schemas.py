@@ -37,7 +37,7 @@ class AnalysisResult:
     critique: list[CritiqueItem]
     recommendations: list[str]
     bullet_rewrite_templates: list[str]
+    model_signals: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
-

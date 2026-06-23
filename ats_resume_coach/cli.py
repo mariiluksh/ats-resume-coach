@@ -6,11 +6,13 @@ import argparse
 import json
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from .analyzer import ResumeAnalyzer
 from .config import AUTHORIZED_RESUME_ZIP_ENV, JOB_PARQUET_ENV, default_model_dir, env_path
 from .ingest import fetch_url_text, read_file_text
+from .local_model import load_optional_local_model
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,6 +50,29 @@ def main(argv: list[str] | None = None) -> int:
     train_parser.add_argument("--limit-resumes", type=int, default=1000)
     train_parser.add_argument("--top-n", type=int, default=120)
 
+    model_parser = subparsers.add_parser(
+        "train-model",
+        help="Train a local private TF-IDF model from job data and optional authorized resumes.",
+    )
+    model_parser.add_argument("--jobs-parquet", type=Path, default=env_path(JOB_PARQUET_ENV))
+    model_parser.add_argument(
+        "--authorized-resume-zip",
+        type=Path,
+        default=env_path(AUTHORIZED_RESUME_ZIP_ENV),
+        help="Optional zip of resumes you own or have explicit permission to process.",
+    )
+    model_parser.add_argument(
+        "--confirm-resume-consent",
+        action="store_true",
+        help="Required before processing any resume zip.",
+    )
+    model_parser.add_argument("--output-dir", type=Path, default=default_model_dir() / "local_tfidf")
+    model_parser.add_argument("--limit-jobs", type=int)
+    model_parser.add_argument("--limit-resumes", type=int, default=1000)
+    model_parser.add_argument("--max-features", type=int, default=20000)
+    model_parser.add_argument("--min-df", type=int, default=3)
+    model_parser.add_argument("--clusters", type=int, default=12)
+
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -56,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         return _analyze(args)
     if args.command == "train-profile":
         return _train_profile(args)
+    if args.command == "train-model":
+        return _train_model(args)
     parser.error("Unknown command.")
     return 2
 
@@ -89,7 +116,8 @@ def _analyze(args: argparse.Namespace) -> int:
     else:
         resume_text = args.resume_text
 
-    result = ResumeAnalyzer().analyze(job_text, resume_text)
+    local_model = load_optional_local_model(default_model_dir() / "local_tfidf")
+    result = ResumeAnalyzer(local_model=local_model).analyze(job_text, resume_text)
     indent = 2 if args.pretty else None
     print(json.dumps(result.to_dict(), indent=indent))
     return 0
@@ -109,6 +137,26 @@ def _train_profile(args: argparse.Namespace) -> int:
         top_n=args.top_n,
     )
     print(f"Wrote local keyword profile to {output}")
+    return 0
+
+
+def _train_model(args: argparse.Namespace) -> int:
+    if not args.jobs_parquet:
+        raise SystemExit(f"Missing --jobs-parquet or {JOB_PARQUET_ENV}.")
+    from .training.model import train_local_tfidf_model_from_paths
+
+    summary = train_local_tfidf_model_from_paths(
+        jobs_parquet=args.jobs_parquet,
+        authorized_resume_zip=args.authorized_resume_zip,
+        confirm_resume_consent=args.confirm_resume_consent,
+        output_dir=args.output_dir,
+        limit_jobs=args.limit_jobs,
+        limit_resumes=args.limit_resumes,
+        max_features=args.max_features,
+        min_df=args.min_df,
+        clusters=args.clusters,
+    )
+    print(json.dumps(asdict(summary), indent=2))
     return 0
 
 
