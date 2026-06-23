@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -14,6 +14,7 @@ from .analyzer import ResumeAnalyzer
 from .config import default_model_dir
 from .ingest import IngestError, extract_text_from_bytes, fetch_url_text
 from .local_model import load_optional_local_model
+from .rewriter import build_resume_draft
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -85,6 +86,25 @@ def create_app() -> FastAPI:
                 {"result": None, "error": str(exc)},
                 status_code=400,
             )
+
+    @app.post("/rewrite")
+    async def rewrite_resume(
+        job_url: Annotated[str | None, Form()] = None,
+        job_text: Annotated[str | None, Form()] = None,
+        resume_text: Annotated[str | None, Form()] = None,
+        job_file: Annotated[UploadFile | None, File()] = None,
+        resume_file: Annotated[UploadFile | None, File()] = None,
+    ) -> Response:
+        try:
+            resolved_job_text = await _resolve_job_text(job_url=job_url, job_text=job_text, job_file=job_file)
+            resolved_resume_text = await _resolve_resume_text(resume_text=resume_text, resume_file=resume_file)
+            analysis = analyzer.analyze(resolved_job_text, resolved_resume_text)
+            draft = build_resume_draft(resolved_job_text, resolved_resume_text, analysis)
+        except (ValueError, IngestError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        headers = {"Content-Disposition": f'attachment; filename="{draft.filename}"'}
+        return Response(content=draft.data, media_type=draft.content_type, headers=headers)
 
     return app
 

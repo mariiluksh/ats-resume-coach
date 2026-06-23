@@ -6,7 +6,7 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from .schemas import AnalysisResult, CritiqueItem, ScoreBreakdown
+from .schemas import AnalysisResult, CritiqueItem, EditPlanItem, ScoreBreakdown
 from .taxonomy import (
     ACTION_VERBS,
     ROLE_LEVEL_SIGNALS,
@@ -76,9 +76,18 @@ class ResumeAnalyzer:
             bullet_stats=bullet_stats,
             format_stats=format_stats,
         )
+        edit_plan = self._build_edit_plan(
+            missing_keywords=missing_keywords,
+            missing_skills=missing_skills,
+            sections=sections,
+            contacts=contacts,
+            bullet_stats=bullet_stats,
+            resume_text=resume_text,
+        )
         model_signals = self._model_signals(job_text=job_text, resume_text=resume_text)
         if model_signals:
             self._add_model_critique(critique, model_signals)
+            edit_plan.extend(self._model_edit_plan(model_signals))
 
         recommendations = self._recommendations(critique, missing_keywords, missing_skills, sections)
 
@@ -93,6 +102,7 @@ class ResumeAnalyzer:
             matched_keywords=matched_keywords[:20],
             missing_keywords=missing_keywords,
             critique=critique,
+            edit_plan=edit_plan,
             recommendations=recommendations,
             bullet_rewrite_templates=self._bullet_templates(missing_keywords, missing_skills),
             model_signals=model_signals,
@@ -345,6 +355,113 @@ class ResumeAnalyzer:
             )
         return items
 
+    def _build_edit_plan(
+        self,
+        *,
+        missing_keywords: list[str],
+        missing_skills: dict[str, list[str]],
+        sections: dict[str, bool],
+        contacts: dict[str, bool],
+        bullet_stats: dict[str, int | float],
+        resume_text: str,
+    ) -> list[EditPlanItem]:
+        items: list[EditPlanItem] = []
+
+        if not sections.get("summary"):
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Summary",
+                    current=None,
+                    suggestion="Add a 1-2 sentence summary that mirrors the target role and your strongest truthful skills.",
+                    reason="A short summary helps ATS and recruiters anchor the resume to the vacancy.",
+                )
+            )
+        if not sections.get("skills"):
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Skills",
+                    current=None,
+                    suggestion="Add a Skills section with only tools and technologies you can defend in interview.",
+                    reason="ATS matching improves when key tools appear in a dedicated skills block.",
+                )
+            )
+        if not sections.get("projects"):
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Projects",
+                    current=None,
+                    suggestion="Add 2-4 project bullets that show the tools and results most relevant to the job.",
+                    reason="Intern resumes usually need project evidence when work history is thin.",
+                )
+            )
+        if not sections.get("education"):
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Education",
+                    current=None,
+                    suggestion="Add degree, school, expected graduation date, and relevant coursework.",
+                    reason="Education is an important signal for entry-level screening.",
+                )
+            )
+        if not contacts["linkedin"] or not contacts["github"]:
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Contact",
+                    current=None,
+                    suggestion="Add LinkedIn and GitHub or portfolio links in plain text.",
+                    reason="Technical recruiters scan for public work samples and profile links.",
+                )
+            )
+        if int(bullet_stats["count"]) == 0:
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Projects/Experience",
+                    current=None,
+                    suggestion="Insert concise bullets under each project or experience item with an action verb and a result.",
+                    reason="The resume text did not expose bullets, which hurts ATS readability.",
+                )
+            )
+        else:
+            for bullet in extract_bullet_like_lines(resume_text)[:3]:
+                if self._has_weak_phrase(bullet) or len(tokenize(bullet)) < 8 or not has_metric(bullet):
+                    items.append(
+                        EditPlanItem(
+                            action="replace",
+                            section="Projects/Experience",
+                            current=bullet,
+                            suggestion=self._rewrite_bullet(bullet, missing_skills, missing_keywords),
+                            reason="This bullet is vague or hard for ATS to score; rewrite it with a clearer action-result structure.",
+                        )
+                    )
+        if missing_keywords:
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Keywords",
+                    current=", ".join(missing_keywords[:8]),
+                    suggestion="Add only truthful instances of the missing job terms in skills, summary, or bullets.",
+                    reason="Mirror vacancy language where it reflects real experience.",
+                )
+            )
+        if missing_skills:
+            flat_skills = ", ".join(skill for values in missing_skills.values() for skill in values[:6])
+            items.append(
+                EditPlanItem(
+                    action="insert",
+                    section="Skills/Projects",
+                    current=flat_skills,
+                    suggestion="If these skills are truly yours, name them directly in the relevant project or skills section.",
+                    reason="The resume currently under-signals skills the vacancy expects.",
+                )
+            )
+        return items
+
     def _model_signals(self, *, job_text: str, resume_text: str) -> dict[str, Any] | None:
         if not self.local_model:
             return None
@@ -366,6 +483,43 @@ class ResumeAnalyzer:
                     + ".",
                 )
             )
+
+    def _model_edit_plan(self, model_signals: dict[str, Any]) -> list[EditPlanItem]:
+        missing_terms = model_signals.get("missing_cluster_terms") or []
+        if not missing_terms:
+            return []
+        return [
+            EditPlanItem(
+                action="insert",
+                section="Model-derived keywords",
+                current=", ".join(missing_terms[:8]),
+                suggestion="If these model-derived terms are truthful for your background, work them into the summary, skills, or project bullets.",
+                reason="The local job model found adjacent terms that the current resume does not expose.",
+            )
+        ]
+
+    def _rewrite_bullet(self, bullet: str, missing_skills: dict[str, list[str]], missing_keywords: list[str]) -> str:
+        cleaned = bullet.strip(" -•\t")
+        if not cleaned:
+            return "Write a concise bullet with an action verb, tools used, and a measurable result if true."
+        if self._has_weak_phrase(cleaned):
+            for phrase in WEAK_PHRASES:
+                if phrase in normalize_for_match(cleaned):
+                    cleaned = re.sub(re.escape(phrase), "built", cleaned, flags=re.IGNORECASE)
+                    break
+        if not self._has_action_verb(cleaned):
+            cleaned = f"Built {cleaned[0].lower() + cleaned[1:]}" if cleaned else cleaned
+        extras = []
+        for values in missing_skills.values():
+            extras.extend(values[:1])
+        if extras:
+            extras = extras[:2]
+            cleaned = f"{cleaned} using {', '.join(extras)}"
+        elif missing_keywords:
+            cleaned = f"{cleaned} with focus on {', '.join(missing_keywords[:2])}"
+        if not cleaned.endswith("."):
+            cleaned += "."
+        return cleaned
 
     def _recommendations(
         self,

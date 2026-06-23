@@ -3,6 +3,7 @@
 Open-source ATS resume critique service for intern and entry-level candidates.
 
 The app accepts a job vacancy and a trainee resume, extracts text, compares role requirements against the resume, and returns an ATS-focused score with prioritized fixes.
+It also generates a tailored resume draft you can download after review.
 
 ## Privacy model
 
@@ -52,6 +53,17 @@ python -m ats_resume_coach.cli analyze \
   --job-file path/to/job.txt \
   --resume-file path/to/resume.pdf
 ```
+
+To generate a tailored draft file from the CLI:
+
+```bash
+python -m ats_resume_coach.cli rewrite \
+  --job-file path/to/job.txt \
+  --resume-file path/to/resume.pdf \
+  --output tailored_resume_draft.docx
+```
+
+In the web app, use the `Rewrite and download` button after entering the vacancy and resume.
 
 ## Optional local profile training
 

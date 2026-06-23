@@ -62,6 +62,7 @@ Build an open-source service that accepts a job vacancy and an intern/entry-leve
    - Save outputs under ignored `models/`.
    - Avoid committing any trained artifacts or derived private examples.
    - Require explicit consent before processing any resume corpus.
+   - Generate a tailored resume draft file from the analyzed inputs.
 
 5. CLI and documentation
    - Add CLI commands for local analysis and optional profile training.

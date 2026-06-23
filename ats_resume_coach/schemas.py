@@ -24,6 +24,15 @@ class CritiqueItem:
 
 
 @dataclass(frozen=True)
+class EditPlanItem:
+    action: str
+    section: str
+    current: str | None
+    suggestion: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class AnalysisResult:
     overall_score: int
     verdict: str
@@ -35,6 +44,7 @@ class AnalysisResult:
     matched_keywords: list[str]
     missing_keywords: list[str]
     critique: list[CritiqueItem]
+    edit_plan: list[EditPlanItem]
     recommendations: list[str]
     bullet_rewrite_templates: list[str]
     model_signals: dict | None = None

@@ -44,7 +44,10 @@
               Or paste text
               <textarea name="resume_text" rows="15" placeholder="Paste resume text"></textarea>
             </label>
-            <button type="submit">Analyze resume</button>
+            <div class="actions">
+              <button type="submit" formaction="/analyze">Analyze resume</button>
+              <button type="submit" class="secondary" formaction="/rewrite">Rewrite and download</button>
+            </div>
           </div>
         </form>
 
@@ -111,6 +114,25 @@
                   <li>{{ recommendation }}</li>
                 {% endfor %}
               </ol>
+            </section>
+
+            <section class="result-section">
+              <h3>Edit plan</h3>
+              <ul class="edit-plan">
+                {% for item in result.edit_plan %}
+                  <li>
+                    <span class="pill">{{ item.action }}</span>
+                    <strong>{{ item.section }}</strong>
+                    {% if item.current %}
+                      <p><code>{{ item.current }}</code></p>
+                    {% endif %}
+                    <p>{{ item.suggestion }}</p>
+                    <small>{{ item.reason }}</small>
+                  </li>
+                {% else %}
+                  <li><em>No structural edits detected.</em></li>
+                {% endfor %}
+              </ul>
             </section>
 
             {% if result.model_signals %}

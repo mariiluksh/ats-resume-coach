@@ -73,6 +73,19 @@ def main(argv: list[str] | None = None) -> int:
     model_parser.add_argument("--min-df", type=int, default=3)
     model_parser.add_argument("--clusters", type=int, default=12)
 
+    rewrite_parser = subparsers.add_parser(
+        "rewrite",
+        help="Generate a tailored resume draft as a docx file.",
+    )
+    rewrite_job_group = rewrite_parser.add_mutually_exclusive_group(required=True)
+    rewrite_job_group.add_argument("--job-file", type=Path)
+    rewrite_job_group.add_argument("--job-url")
+    rewrite_job_group.add_argument("--job-text")
+    rewrite_resume_group = rewrite_parser.add_mutually_exclusive_group(required=True)
+    rewrite_resume_group.add_argument("--resume-file", type=Path)
+    rewrite_resume_group.add_argument("--resume-text")
+    rewrite_parser.add_argument("--output", type=Path, default=Path("tailored_resume_draft.docx"))
+
     args = parser.parse_args(argv)
 
     if args.command == "serve":
@@ -83,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
         return _train_profile(args)
     if args.command == "train-model":
         return _train_model(args)
+    if args.command == "rewrite":
+        return _rewrite(args)
     parser.error("Unknown command.")
     return 2
 
@@ -157,6 +172,29 @@ def _train_model(args: argparse.Namespace) -> int:
         clusters=args.clusters,
     )
     print(json.dumps(asdict(summary), indent=2))
+    return 0
+
+
+def _rewrite(args: argparse.Namespace) -> int:
+    if args.job_file:
+        job_text = read_file_text(args.job_file)
+    elif args.job_url:
+        job_text = fetch_url_text(args.job_url)
+    else:
+        job_text = args.job_text
+
+    if args.resume_file:
+        resume_text = read_file_text(args.resume_file)
+    else:
+        resume_text = args.resume_text
+
+    local_model = load_optional_local_model(default_model_dir() / "local_tfidf")
+    analysis = ResumeAnalyzer(local_model=local_model).analyze(job_text, resume_text)
+    from .rewriter import build_resume_draft
+
+    draft = build_resume_draft(job_text, resume_text, analysis)
+    args.output.write_bytes(draft.data)
+    print(f"Wrote tailored resume draft to {args.output}")
     return 0
 
 

@@ -79,6 +79,16 @@ button {
   width: 100%;
 }
 
+button.secondary {
+  background: #5f6c7b;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .analysis-form,
 .grid {
   display: grid;
@@ -246,6 +256,36 @@ textarea {
   color: #17662b;
 }
 
+.edit-plan {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.edit-plan li {
+  border-left: 3px solid #185c88;
+  padding-left: 12px;
+}
+
+.edit-plan p,
+.edit-plan small {
+  margin-bottom: 4px;
+}
+
+.pill {
+  display: inline-block;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #e7f1f7;
+  color: #185c88;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 ol,
 ul {
   margin-bottom: 0;
@@ -275,5 +315,8 @@ code {
   .grid {
     grid-template-columns: 1fr;
   }
-}
 
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}
