@@ -1,0 +1,45 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+.venv/
+venv/
+env/
+
+.env
+.env.*
+!.env.example
+
+# Local/private data. Do not commit raw resumes, job exports, trained artifacts,
+# extracted documents, or generated analysis outputs.
+data/raw/**
+data/processed/**
+models/**
+artifacts/**
+outputs/**
+
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+
+*.parquet
+*.zip
+*.pdf
+*.doc
+*.docx
+*.jsonl
+*.csv
+*.tsv
+*.sqlite
+*.db
+
+# Local app/runtime files.
+*.log
+.uvicorn.pid
+
