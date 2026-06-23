@@ -40,7 +40,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
-        return TEMPLATES.TemplateResponse("index.html", {"request": request, "result": None, "error": None})
+        return TEMPLATES.TemplateResponse(request, "index.html", {"result": None, "error": None})
 
     @app.post("/api/analyze")
     async def analyze_api(
@@ -74,13 +74,15 @@ def create_app() -> FastAPI:
                 await _resolve_resume_text(resume_text=resume_text, resume_file=resume_file),
             )
             return TEMPLATES.TemplateResponse(
+                request,
                 "index.html",
-                {"request": request, "result": result.to_dict(), "error": None},
+                {"result": result.to_dict(), "error": None},
             )
         except (ValueError, IngestError) as exc:
             return TEMPLATES.TemplateResponse(
+                request,
                 "index.html",
-                {"request": request, "result": None, "error": str(exc)},
+                {"result": None, "error": str(exc)},
                 status_code=400,
             )
 
