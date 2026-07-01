@@ -72,13 +72,17 @@ def _ensure_public_hostname(hostname: str) -> None:
 def _extract_pdf(content: bytes) -> str:
     try:
         from pypdf import PdfReader
+        from pypdf.errors import PyPdfError
     except ImportError as exc:
         raise IngestError("PDF parsing requires the pypdf dependency.") from exc
 
-    reader = PdfReader(BytesIO(content))
-    pages = []
-    for page in reader.pages:
-        pages.append(page.extract_text() or "")
+    try:
+        reader = PdfReader(BytesIO(content))
+        pages = []
+        for page in reader.pages:
+            pages.append(page.extract_text() or "")
+    except PyPdfError as exc:
+        raise IngestError("Could not extract text from PDF.") from exc
     return "\n".join(pages).strip()
 
 
@@ -119,4 +123,3 @@ def _decode_text(content: bytes) -> str:
         except UnicodeDecodeError:
             continue
     raise IngestError("Could not decode document text.")
-
