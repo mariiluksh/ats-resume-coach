@@ -19,6 +19,7 @@ from .rewriter import build_resume_draft
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "web" / "templates"))
+EMPTY_FORM = {"job_url": "", "job_text": "", "resume_text": ""}
 
 
 def create_app() -> FastAPI:
@@ -41,7 +42,11 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
-        return TEMPLATES.TemplateResponse(request, "index.html", {"result": None, "error": None})
+        return TEMPLATES.TemplateResponse(
+            request,
+            "index.html",
+            {"result": None, "error": None, "form": EMPTY_FORM},
+        )
 
     @app.post("/api/analyze")
     async def analyze_api(
@@ -70,25 +75,39 @@ def create_app() -> FastAPI:
         resume_file: Annotated[UploadFile | None, File()] = None,
     ) -> HTMLResponse:
         try:
-            result = analyzer.analyze(
-                await _resolve_job_text(job_url=job_url, job_text=job_text, job_file=job_file),
-                await _resolve_resume_text(resume_text=resume_text, resume_file=resume_file),
-            )
+            resolved_job_text = await _resolve_job_text(job_url=job_url, job_text=job_text, job_file=job_file)
+            resolved_resume_text = await _resolve_resume_text(resume_text=resume_text, resume_file=resume_file)
+            result = analyzer.analyze(resolved_job_text, resolved_resume_text)
             return TEMPLATES.TemplateResponse(
                 request,
                 "index.html",
-                {"result": result.to_dict(), "error": None},
+                {
+                    "result": result.to_dict(),
+                    "error": None,
+                    "form": _form_state(
+                        job_url=job_url,
+                        job_text=job_text,
+                        resume_text=resume_text,
+                        resolved_job_text=resolved_job_text,
+                        resolved_resume_text=resolved_resume_text,
+                    ),
+                },
             )
         except (ValueError, IngestError) as exc:
             return TEMPLATES.TemplateResponse(
                 request,
                 "index.html",
-                {"result": None, "error": str(exc)},
+                {
+                    "result": None,
+                    "error": str(exc),
+                    "form": _form_state(job_url=job_url, job_text=job_text, resume_text=resume_text),
+                },
                 status_code=400,
             )
 
     @app.post("/rewrite")
     async def rewrite_resume(
+        request: Request,
         job_url: Annotated[str | None, Form()] = None,
         job_text: Annotated[str | None, Form()] = None,
         resume_text: Annotated[str | None, Form()] = None,
@@ -101,7 +120,16 @@ def create_app() -> FastAPI:
             analysis = analyzer.analyze(resolved_job_text, resolved_resume_text)
             draft = build_resume_draft(resolved_job_text, resolved_resume_text, analysis)
         except (ValueError, IngestError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            return TEMPLATES.TemplateResponse(
+                request,
+                "index.html",
+                {
+                    "result": None,
+                    "error": str(exc),
+                    "form": _form_state(job_url=job_url, job_text=job_text, resume_text=resume_text),
+                },
+                status_code=400,
+            )
 
         headers = {"Content-Disposition": f'attachment; filename="{draft.filename}"'}
         return Response(content=draft.data, media_type=draft.content_type, headers=headers)
@@ -143,6 +171,25 @@ async def _read_upload(upload: UploadFile) -> str:
         filename=upload.filename or "",
         content_type=upload.content_type or "",
     )
+
+
+def _form_state(
+    *,
+    job_url: str | None,
+    job_text: str | None,
+    resume_text: str | None,
+    resolved_job_text: str | None = None,
+    resolved_resume_text: str | None = None,
+) -> dict[str, str]:
+    return {
+        "job_url": job_url or "",
+        "job_text": resolved_job_text if resolved_job_text and not (job_text or "").strip() else job_text or "",
+        "resume_text": (
+            resolved_resume_text
+            if resolved_resume_text and not (resume_text or "").strip()
+            else resume_text or ""
+        ),
+    }
 
 
 app = create_app()

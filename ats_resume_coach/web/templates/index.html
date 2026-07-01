@@ -22,7 +22,7 @@
             <h2>Vacancy</h2>
             <label>
               Public URL
-              <input type="url" name="job_url" placeholder="https://company.com/jobs/intern">
+              <input type="url" name="job_url" placeholder="https://company.com/jobs/intern" value="{{ form.job_url }}">
             </label>
             <label>
               Upload PDF, HTML, or TXT
@@ -30,7 +30,7 @@
             </label>
             <label>
               Or paste text
-              <textarea name="job_text" rows="12" placeholder="Paste the vacancy description"></textarea>
+              <textarea name="job_text" rows="12" placeholder="Paste the vacancy description">{{ form.job_text }}</textarea>
             </label>
           </div>
 
@@ -42,7 +42,7 @@
             </label>
             <label>
               Or paste text
-              <textarea name="resume_text" rows="15" placeholder="Paste resume text"></textarea>
+              <textarea name="resume_text" rows="15" placeholder="Paste resume text">{{ form.resume_text }}</textarea>
             </label>
             <div class="actions">
               <button type="submit" formaction="/analyze">Analyze resume</button>
