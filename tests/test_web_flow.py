@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from io import BytesIO
+import re
 import unittest
 
+from docx import Document
 from fastapi.testclient import TestClient
 
 from ats_resume_coach.api import create_app
@@ -43,6 +46,48 @@ class WebFlowTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(JOB_TEXT, response.text)
         self.assertIn("Jane jane@example.com", response.text)
+
+    def test_rewrite_after_analyze_reuses_uploaded_docx_source(self) -> None:
+        source_doc = Document()
+        title = source_doc.add_paragraph("Jane Doe")
+        title.style = "Title"
+        source_doc.add_paragraph("jane@example.com | github.com/jane")
+        source_doc.add_paragraph("Experience", style="Heading 1")
+        source_doc.add_paragraph("Built the original trading tool with Python and SQL.", style="List Bullet")
+        source_buffer = BytesIO()
+        source_doc.save(source_buffer)
+
+        analyze_response = self.client.post(
+            "/analyze",
+            data={"job_text": JOB_TEXT},
+            files={
+                "resume_file": (
+                    "jane_resume.docx",
+                    source_buffer.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            },
+        )
+        token_match = re.search(r'name="resume_source_token" value="([^"]+)"', analyze_response.text)
+        self.assertIsNotNone(token_match)
+
+        rewrite_response = self.client.post(
+            "/rewrite",
+            data={
+                "job_text": JOB_TEXT,
+                "resume_text": "Jane Doe\nExperience\nBuilt the original trading tool with Python and SQL.",
+                "resume_source_token": token_match.group(1),
+            },
+        )
+        rewritten = Document(BytesIO(rewrite_response.content))
+        rewritten_text = "\n".join(paragraph.text for paragraph in rewritten.paragraphs)
+
+        self.assertEqual(rewrite_response.status_code, 200)
+        self.assertIn("Jane Doe", rewritten_text)
+        self.assertIn("Built the original trading tool", rewritten_text)
+        self.assertIn("Professional Summary", rewritten_text)
+        self.assertNotIn("Tailored Resume Draft", rewritten_text)
+        self.assertEqual(rewritten.paragraphs[0].style.name, "Title")
 
     def test_rewrite_downloads_docx_from_form_text(self) -> None:
         response = self.client.post(

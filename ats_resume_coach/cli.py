@@ -176,6 +176,8 @@ def _train_model(args: argparse.Namespace) -> int:
 
 
 def _rewrite(args: argparse.Namespace) -> int:
+    source_docx = None
+    source_filename = None
     if args.job_file:
         job_text = read_file_text(args.job_file)
     elif args.job_url:
@@ -185,6 +187,9 @@ def _rewrite(args: argparse.Namespace) -> int:
 
     if args.resume_file:
         resume_text = read_file_text(args.resume_file)
+        if args.resume_file.suffix.lower() == ".docx":
+            source_docx = args.resume_file.read_bytes()
+            source_filename = args.resume_file.name
     else:
         resume_text = args.resume_text
 
@@ -192,7 +197,13 @@ def _rewrite(args: argparse.Namespace) -> int:
     analysis = ResumeAnalyzer(local_model=local_model).analyze(job_text, resume_text)
     from .rewriter import build_resume_draft
 
-    draft = build_resume_draft(job_text, resume_text, analysis)
+    draft = build_resume_draft(
+        job_text,
+        resume_text,
+        analysis,
+        source_docx=source_docx,
+        source_filename=source_filename,
+    )
     args.output.write_bytes(draft.data)
     print(f"Wrote tailored resume draft to {args.output}")
     return 0

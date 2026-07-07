@@ -18,6 +18,7 @@
         </header>
 
         <form class="analysis-form" action="/analyze" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="resume_source_token" value="{{ form.resume_source_token }}">
           <div class="pane">
             <h2>Vacancy</h2>
             <label>
