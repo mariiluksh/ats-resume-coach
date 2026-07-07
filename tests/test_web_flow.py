@@ -85,7 +85,7 @@ class WebFlowTest(unittest.TestCase):
         self.assertEqual(rewrite_response.status_code, 200)
         self.assertIn("Jane Doe", rewritten_text)
         self.assertIn("Built the original trading tool", rewritten_text)
-        self.assertIn("Professional Summary", rewritten_text)
+        self.assertIn("PROFILE", rewritten_text)
         self.assertNotIn("Tailored Resume Draft", rewritten_text)
         self.assertEqual(rewritten.paragraphs[0].style.name, "Title")
 

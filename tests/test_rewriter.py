@@ -25,7 +25,7 @@ class ResumeRewriterTest(unittest.TestCase):
 
         self.assertEqual(draft.content_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         self.assertTrue(draft.data.startswith(b"PK"))
-        self.assertIn("Professional Summary", draft.preview_text)
+        self.assertIn("PROFILE", draft.preview_text)
 
     def test_docx_rewrite_preserves_source_document(self) -> None:
         job = "Software engineering intern using Python FastAPI SQL Git testing communication."
@@ -33,6 +33,8 @@ class ResumeRewriterTest(unittest.TestCase):
         title = source_doc.add_paragraph("Jane Doe")
         title.style = "Title"
         source_doc.add_paragraph("jane@example.com | github.com/jane")
+        source_doc.add_paragraph("Profile", style="Heading 1")
+        source_doc.add_paragraph("Hard-working student seeking an opportunity.")
         source_doc.add_paragraph("Experience", style="Heading 1")
         source_doc.add_paragraph(
             "Built the original portfolio API with Python and SQL for 1000 records.",
@@ -40,6 +42,10 @@ class ResumeRewriterTest(unittest.TestCase):
         )
         source_doc.add_paragraph("Education", style="Heading 1")
         source_doc.add_paragraph("BS Computer Science, University of Leeds")
+        source_doc.add_paragraph("Technical Skills", style="Heading 1")
+        source_doc.add_paragraph("Programming: Python, SQL Tools: Git")
+        source_doc.add_paragraph("Professional Interests", style="Heading 1")
+        source_doc.add_paragraph("software engineering")
         source_buffer = BytesIO()
         source_doc.save(source_buffer)
 
@@ -59,9 +65,14 @@ class ResumeRewriterTest(unittest.TestCase):
         self.assertIn("Jane Doe", rewritten_text)
         self.assertIn("Built the original portfolio API", rewritten_text)
         self.assertIn("BS Computer Science, University of Leeds", rewritten_text)
-        self.assertIn("Professional Summary", rewritten_text)
+        self.assertIn("PROFILE", rewritten_text)
+        self.assertNotIn("Hard-working student seeking an opportunity.", rewritten_text)
         self.assertNotIn("Tailored Resume Draft", rewritten_text)
         self.assertEqual(rewritten.paragraphs[0].style.name, "Title")
+        self.assertIn("BS Computer Science student at University of Leeds", rewritten_text)
+        headings = [paragraph.text for paragraph in rewritten.paragraphs if paragraph.text.isupper()]
+        self.assertLess(headings.index("EDUCATION"), headings.index("EXPERIENCE"))
+        self.assertLess(headings.index("TECHNICAL SKILLS"), headings.index("PROFESSIONAL INTERESTS"))
 
     def test_text_rewrite_keeps_all_source_sections(self) -> None:
         job = "Data analyst intern using Python SQL Excel communication visualization."
