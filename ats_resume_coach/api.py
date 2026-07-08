@@ -129,6 +129,22 @@ def create_app() -> FastAPI:
                 },
                 status_code=400,
             )
+        except Exception as exc:
+            return TEMPLATES.TemplateResponse(
+                request,
+                "index.html",
+                {
+                    "result": None,
+                    "error": f"Unexpected error while processing the resume: {exc}",
+                    "form": _form_state(
+                        job_url=job_url,
+                        job_text=job_text,
+                        resume_text=resume_text,
+                        resume_source_token=resume_source_token,
+                    ),
+                },
+                status_code=500,
+            )
 
     @app.post("/rewrite")
     async def rewrite_resume(
@@ -171,6 +187,22 @@ def create_app() -> FastAPI:
                     ),
                 },
                 status_code=400,
+            )
+        except Exception as exc:
+            return TEMPLATES.TemplateResponse(
+                request,
+                "index.html",
+                {
+                    "result": None,
+                    "error": f"Unexpected error while rewriting the resume: {exc}",
+                    "form": _form_state(
+                        job_url=job_url,
+                        job_text=job_text,
+                        resume_text=resume_text,
+                        resume_source_token=resume_source_token,
+                    ),
+                },
+                status_code=500,
             )
 
         headers = {"Content-Disposition": f'attachment; filename="{draft.filename}"'}

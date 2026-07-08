@@ -92,15 +92,18 @@ def _extract_docx(content: bytes) -> str:
     except ImportError as exc:
         raise IngestError("DOCX parsing requires the python-docx dependency.") from exc
 
-    document = Document(BytesIO(content))
-    paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
-    table_cells = []
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                value = cell.text.strip()
-                if value:
-                    table_cells.append(value)
+    try:
+        document = Document(BytesIO(content))
+        paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+        table_cells = []
+        for table in document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    value = cell.text.strip()
+                    if value:
+                        table_cells.append(value)
+    except Exception as exc:
+        raise IngestError("Could not extract text from DOCX.") from exc
     return "\n".join(paragraphs + table_cells).strip()
 
 

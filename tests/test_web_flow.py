@@ -47,6 +47,22 @@ class WebFlowTest(unittest.TestCase):
         self.assertIn(JOB_TEXT, response.text)
         self.assertIn("Jane jane@example.com", response.text)
 
+    def test_analyze_shows_error_for_invalid_docx_upload(self) -> None:
+        response = self.client.post(
+            "/analyze",
+            data={"job_text": JOB_TEXT},
+            files={
+                "resume_file": (
+                    "broken.docx",
+                    b"not a real docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Could not extract text from DOCX.", response.text)
+
     def test_rewrite_after_analyze_reuses_uploaded_docx_source(self) -> None:
         source_doc = Document()
         title = source_doc.add_paragraph("Jane Doe")

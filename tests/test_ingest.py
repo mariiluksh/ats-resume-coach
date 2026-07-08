@@ -14,6 +14,10 @@ class IngestTest(unittest.TestCase):
         with self.assertRaises(IngestError):
             extract_text_from_bytes(b"not a valid pdf", filename="resume.pdf")
 
+    def test_invalid_docx_raises_ingest_error(self) -> None:
+        with self.assertRaises(IngestError):
+            extract_text_from_bytes(b"not a real docx", filename="resume.docx")
+
     def test_resume_zip_skips_unreadable_members(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             archive_path = Path(tmpdir) / "resumes.zip"
