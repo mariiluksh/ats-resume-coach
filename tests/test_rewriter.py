@@ -99,6 +99,42 @@ class ResumeRewriterTest(unittest.TestCase):
         self.assertIn("Dean's List", rewritten_text)
         self.assertNotIn("Tailored Resume Draft", rewritten_text)
 
+    def test_docx_rewrite_strengthens_summary_without_mangling_role_lines(self) -> None:
+        job = "Commodities Portfolio Manager using Python portfolio construction risk analysis communication."
+        source_doc = Document()
+        source_doc.add_paragraph("Mariia Luksha", style="Title")
+        source_doc.add_paragraph("Leeds, United Kingdom")
+        source_doc.add_paragraph("Profile", style="Heading 1")
+        source_doc.add_paragraph("Computer Science student interested in finance and technology.")
+        source_doc.add_paragraph("Experience", style="Heading 1")
+        source_doc.add_paragraph(
+            "Core frontend developer on a real-time trading platform used by traders across Binance, Bybit and Hyperliquid."
+        )
+        source_doc.add_paragraph("Education", style="Heading 1")
+        source_doc.add_paragraph("MEng Computer Science (Artificial Intelligence), University of Leeds")
+        source_doc.add_paragraph("Technical Skills", style="Heading 1")
+        source_doc.add_paragraph("Programming: Python, TypeScript, SQL")
+        source_buffer = BytesIO()
+        source_doc.save(source_buffer)
+
+        resume = "\n".join(paragraph.text for paragraph in source_doc.paragraphs)
+        analysis = ResumeAnalyzer().analyze(job, resume)
+        draft = build_resume_draft(
+            job,
+            resume,
+            analysis,
+            source_docx=source_buffer.getvalue(),
+            source_filename="mariia_resume.docx",
+        )
+        rewritten = Document(BytesIO(draft.data))
+        rewritten_text = "\n".join(paragraph.text for paragraph in rewritten.paragraphs)
+
+        self.assertIn("commercial software engineering experience", rewritten_text)
+        self.assertIn("trading technology for financial markets", rewritten_text)
+        self.assertIn("Python", rewritten_text)
+        self.assertIn("Core frontend developer on a real-time trading platform used by traders across Binance, Bybit and Hyperliquid.", rewritten_text)
+        self.assertNotIn("Delivered core frontend developer", rewritten_text)
+
     def test_analysis_contains_edit_plan(self) -> None:
         job = "Data analyst intern using Python SQL Excel communication visualization."
         resume = """
