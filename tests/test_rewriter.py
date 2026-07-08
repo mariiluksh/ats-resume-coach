@@ -27,6 +27,7 @@ class ResumeRewriterTest(unittest.TestCase):
         self.assertEqual(draft.content_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         self.assertTrue(draft.data.startswith(b"PK"))
         self.assertIn("PROFILE", draft.preview_text)
+        self.assertEqual(draft.filename, "software_engineering_intern_using_python.docx")
 
         rewritten = Document(BytesIO(draft.data))
         self.assertEqual(rewritten.paragraphs[0].alignment, WD_ALIGN_PARAGRAPH.CENTER)

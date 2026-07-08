@@ -176,7 +176,7 @@ def build_resume_draft(
     source_filename: str | None = None,
 ) -> DraftResult:
     job_text = normalize_text(job_text)
-    resume_text = normalize_text(resume_text)
+    resume_text = _merge_wrapped_lines(normalize_text(resume_text))
     if source_docx:
         return _build_style_preserving_docx(
             source_docx=source_docx,
@@ -213,7 +213,7 @@ def build_resume_draft(
 
     filename = _draft_filename(analysis)
     return DraftResult(
-        filename=filename,
+        filename=_source_or_draft_filename(source_filename, analysis),
         content_type=DOCX_CONTENT_TYPE,
         data=buffer.getvalue(),
         preview_text=draft_text,
@@ -230,8 +230,9 @@ def _build_text_draft(
     resume_text: str,
     analysis: AnalysisResult,
 ) -> list[str]:
-    header = _build_header(lines, resume_text)
-    parsed = _parse_text_resume(lines, header)
+    merged_lines = _merge_wrapped_lines_from_lines(lines)
+    header = _build_header(merged_lines, resume_text)
+    parsed = _parse_text_resume(merged_lines, header)
     summary = _build_profile(parsed, analysis, job_text, resume_text)
     skill_lines = _build_skill_lines(analysis, resume_text)
     sections: list[str] = []
@@ -336,7 +337,7 @@ def _build_style_preserving_docx(
     document.save(buffer)
 
     return DraftResult(
-        filename=_tailored_filename(source_filename, analysis),
+        filename=_source_or_draft_filename(source_filename, analysis),
         content_type=DOCX_CONTENT_TYPE,
         data=buffer.getvalue(),
         preview_text="\n".join(preview_lines).strip() + "\n",
@@ -386,6 +387,45 @@ def _parse_text_resume(lines: list[str], header: list[str]) -> ParsedResume:
     return ParsedResume(header=parsed_header, sections=sections)
 
 
+def _merge_wrapped_lines_from_lines(lines: list[str]) -> list[str]:
+    return _merge_wrapped_lines("\n".join(lines)).splitlines()
+
+
+def _merge_wrapped_lines(text: str) -> str:
+    lines = extract_lines(text)
+    merged: list[str] = []
+    for line in lines:
+        if not merged:
+            merged.append(line)
+            continue
+        previous = merged[-1]
+        if _should_merge_wrapped_line(previous, line):
+            merged[-1] = f"{previous} {line}".strip()
+        else:
+            merged.append(line)
+    return "\n".join(merged)
+
+
+def _should_merge_wrapped_line(previous: str, current: str) -> bool:
+    if _looks_like_heading(previous) or _looks_like_heading(current):
+        return False
+    if has_email(previous) or has_email(current) or has_phone(previous) or has_phone(current):
+        return False
+    if "linkedin.com" in normalize_for_match(previous) or "linkedin.com" in normalize_for_match(current):
+        return False
+    if "github.com" in normalize_for_match(previous) or "github.com" in normalize_for_match(current):
+        return False
+    if previous.endswith((".", "!", "?", ":", ";")):
+        return False
+    if current[:1].islower():
+        return True
+    if len(previous.split()) <= 4 or len(current.split()) <= 4:
+        return False
+    if len(previous.split()) <= 12 and len(current.split()) <= 10:
+        return True
+    return False
+
+
 def _resume_styles(document: DocxDocument, parsed: ParsedResume) -> ResumeStyles:
     header_styles = [line.style_name for line in parsed.header]
     section_style = parsed.sections[0].style_name if parsed.sections else "Heading 1"
@@ -423,7 +463,7 @@ def _build_profile(parsed: ParsedResume, analysis: AnalysisResult, job_text: str
     experience = _experience_profile_fragment(parsed, resume_text)
     leadership = _leadership_profile_fragment(resume_text)
     strengths = _strength_terms(analysis, resume_text)
-    interests = _domain_terms(job_text, resume_text)
+    interests = _domain_terms(resume_text)
     role = _clean_role(analysis.job_title_guess)
 
     sentences: list[str] = []
@@ -730,6 +770,15 @@ def _tailored_filename(source_filename: str | None, analysis: AnalysisResult) ->
     return _draft_filename(analysis)
 
 
+def _source_or_draft_filename(source_filename: str | None, analysis: AnalysisResult) -> str:
+    if source_filename:
+        stem = Path(source_filename).stem
+        cleaned = "".join(ch if ch.isalnum() or ch in {" ", "-", "_"} else "_" for ch in stem).strip()
+        if cleaned:
+            return f"{cleaned}_tailored.docx"
+    return _draft_filename(analysis)
+
+
 def _normalize_heading(text: str) -> str:
     return " ".join(text.lower().strip().strip(":").split())
 
@@ -889,6 +938,8 @@ def _format_doc_paragraph(paragraph: Paragraph, run, *, role: str) -> None:
         paragraph_format.space_after = Pt(0)
         run.font.size = Pt(10)
         run.font.name = "Aptos"
+    paragraph_format.keep_together = True
+    paragraph_format.keep_with_next = role in {"section_heading", "name", "contact"}
 
 
 def _is_bullet_paragraph(paragraph: Paragraph) -> bool:
@@ -1024,15 +1075,15 @@ def _strength_terms(analysis: AnalysisResult, resume_text: str) -> list[str]:
     return [_title_skill(term) for term in _dedupe(terms)]
 
 
-def _domain_terms(job_text: str, resume_text: str) -> list[str]:
-    haystack = f"{job_text}\n{resume_text}".lower()
+def _domain_terms(resume_text: str) -> list[str]:
+    haystack = resume_text.lower()
     terms = [term for term in FINANCE_TERMS if term in haystack]
     terms.extend(term for term in TECH_TERMS if term in haystack)
     return [_title_skill(term) for term in _dedupe(terms)]
 
 
 def _build_interest_line(job_text: str, resume_text: str) -> str:
-    terms = _domain_terms(job_text, resume_text)
+    terms = _domain_terms(resume_text)
     if not terms:
         return ""
     return " • ".join(terms[:8])
