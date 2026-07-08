@@ -409,11 +409,15 @@ def _merge_wrapped_lines(text: str) -> str:
 def _should_merge_wrapped_line(previous: str, current: str) -> bool:
     if _looks_like_heading(previous) or _looks_like_heading(current):
         return False
+    if "@" in previous or "@" in current:
+        return False
     if has_email(previous) or has_email(current) or has_phone(previous) or has_phone(current):
         return False
     if "linkedin.com" in normalize_for_match(previous) or "linkedin.com" in normalize_for_match(current):
         return False
     if "github.com" in normalize_for_match(previous) or "github.com" in normalize_for_match(current):
+        return False
+    if previous.startswith(("•", "-", "*")) or current.startswith(("•", "-", "*")):
         return False
     if previous.endswith((".", "!", "?", ":", ";")):
         return False
