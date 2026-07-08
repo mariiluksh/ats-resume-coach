@@ -14,6 +14,29 @@ HTML_SUFFIXES = {".html", ".htm"}
 PDF_SUFFIXES = {".pdf"}
 DOCX_SUFFIXES = {".docx"}
 
+FETCH_HEADER_PROFILES = (
+    {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+    },
+    {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.8",
+    },
+)
+
 
 class IngestError(ValueError):
     """Raised when a document cannot be read or safely fetched."""
@@ -44,15 +67,26 @@ def fetch_url_text(url: str, *, timeout_seconds: int = 12) -> str:
     _ensure_public_hostname(parsed.hostname or "")
 
     import requests
+    last_error: Exception | None = None
 
-    response = requests.get(
-        url,
-        timeout=timeout_seconds,
-        headers={"User-Agent": "ats-resume-coach/0.1 (+https://github.com/)"},
-    )
-    response.raise_for_status()
-    content_type = response.headers.get("content-type", "")
-    return extract_text_from_bytes(response.content, filename=parsed.path, content_type=content_type)
+    for headers in FETCH_HEADER_PROFILES:
+        try:
+            response = requests.get(url, timeout=timeout_seconds, headers=headers)
+            if response.status_code >= 400:
+                last_error = requests.HTTPError(
+                    f"{response.status_code} Client Error: {response.reason} for url: {url}",
+                    response=response,
+                )
+                continue
+            content_type = response.headers.get("content-type", "")
+            return extract_text_from_bytes(response.content, filename=parsed.path, content_type=content_type)
+        except requests.RequestException as exc:
+            last_error = exc
+
+    message = "Could not fetch the job URL. Some sites block automated requests; paste the job text or upload the posting instead."
+    if last_error is not None:
+        raise IngestError(message) from last_error
+    raise IngestError(message)
 
 
 def _ensure_public_hostname(hostname: str) -> None:

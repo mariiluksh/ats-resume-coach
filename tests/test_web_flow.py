@@ -3,11 +3,13 @@ from __future__ import annotations
 from io import BytesIO
 import re
 import unittest
+from unittest.mock import patch
 
 from docx import Document
 from fastapi.testclient import TestClient
 
 from ats_resume_coach.api import create_app
+from ats_resume_coach.ingest import IngestError
 
 
 JOB_TEXT = "Software engineering intern using Python FastAPI SQL Git testing communication."
@@ -62,6 +64,21 @@ class WebFlowTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Could not extract text from DOCX.", response.text)
+
+    def test_analyze_shows_helpful_error_for_blocked_job_url(self) -> None:
+        with patch(
+            "ats_resume_coach.api.fetch_url_text",
+            side_effect=IngestError(
+                "Could not fetch the job URL. Some sites block automated requests; paste the job text or upload the posting instead."
+            ),
+        ):
+            response = self.client.post(
+                "/analyze",
+                data={"job_url": "https://example.com/job", "resume_text": RESUME_TEXT},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Some sites block automated requests", response.text)
 
     def test_rewrite_after_analyze_reuses_uploaded_docx_source(self) -> None:
         source_doc = Document()
