@@ -84,6 +84,14 @@ class ResumeRewriterTest(unittest.TestCase):
         self.assertLess(headings.index("EDUCATION"), headings.index("EXPERIENCE"))
         self.assertLess(headings.index("TECHNICAL SKILLS"), headings.index("PROFESSIONAL INTERESTS"))
 
+    def test_pdf_filename_is_preserved_as_tailored_name(self) -> None:
+        job = "Software engineering intern using Python SQL communication."
+        resume = "Jane jane@example.com\nEducation\nBS Computer Science\nProjects\n- Built API with Python and SQL."
+        analysis = ResumeAnalyzer().analyze(job, resume)
+        draft = build_resume_draft(job, resume, analysis, source_filename="Mykyta Zhestkov - Resume.pdf")
+
+        self.assertEqual(draft.filename, "Mykyta Zhestkov - Resume_tailored.docx")
+
     def test_text_rewrite_keeps_all_source_sections(self) -> None:
         job = "Data analyst intern using Python SQL Excel communication visualization."
         resume = """

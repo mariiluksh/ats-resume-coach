@@ -187,9 +187,9 @@ def _rewrite(args: argparse.Namespace) -> int:
 
     if args.resume_file:
         resume_text = read_file_text(args.resume_file)
+        source_filename = args.resume_file.name
         if args.resume_file.suffix.lower() == ".docx":
             source_docx = args.resume_file.read_bytes()
-            source_filename = args.resume_file.name
     else:
         resume_text = args.resume_text
 
