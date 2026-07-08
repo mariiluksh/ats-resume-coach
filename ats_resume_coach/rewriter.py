@@ -292,46 +292,10 @@ def _build_style_preserving_docx(
     analysis: AnalysisResult,
 ) -> DraftResult:
     document = Document(BytesIO(source_docx))
-    _apply_resume_document_formatting(document)
     parsed = _parse_docx_resume(document)
-    styles = _resume_styles(document, parsed)
     summary = _build_profile(parsed, analysis, job_text, resume_text)
-    skill_lines = _build_skill_lines(analysis, resume_text)
-    preview_lines = ["Rebuilt tailored DOCX resume from original content.", "PROFILE", summary]
-    if skill_lines:
-        preview_lines.extend(["TECHNICAL SKILLS", *skill_lines])
-
-    _clear_document_body(document)
-    _write_header(document, parsed, styles)
-    _write_section(document, "PROFILE", [SourceLine(summary, styles.body)], styles)
-
-    for output_heading in TARGET_SECTION_ORDER:
-        if output_heading == "PROFILE":
-            continue
-        if output_heading == "TECHNICAL SKILLS":
-            if skill_lines:
-                _write_section(
-                    document,
-                    output_heading,
-                    [SourceLine(line, styles.body) for line in skill_lines],
-                    styles,
-                )
-            continue
-        source_sections = _sections_for_output_heading(parsed, output_heading)
-        if not source_sections and output_heading == "PROFESSIONAL INTERESTS":
-            interest_line = _build_interest_line(job_text, resume_text)
-            if interest_line:
-                _write_section(document, output_heading, [SourceLine(interest_line, styles.body)], styles)
-            continue
-        if not source_sections:
-            continue
-        output_lines: list[SourceLine] = []
-        for source_section in source_sections:
-            output_lines.extend(
-                _section_docx_lines(source_section, output_heading, styles, analysis, job_text, resume_text)
-            )
-        if output_lines:
-            _write_section(document, output_heading, output_lines, styles)
+    preview_lines = ["Preserved source DOCX structure with tailored content.", "PROFILE", summary]
+    _rewrite_docx_in_place(document, parsed, analysis, job_text, resume_text, summary)
 
     buffer = BytesIO()
     document.save(buffer)
@@ -344,26 +308,140 @@ def _build_style_preserving_docx(
     )
 
 
+def _rewrite_docx_in_place(
+    document: DocxDocument,
+    parsed: ParsedResume,
+    analysis: AnalysisResult,
+    job_text: str,
+    resume_text: str,
+    summary: str,
+) -> None:
+    del parsed  # structure is preserved by paragraph order; parsing is only used for summary generation
+    current_section = ""
+    skills_lines = _build_skill_lines(analysis, resume_text)
+    skills_text = " | ".join(skills_lines)
+    interest_line = _build_interest_line(job_text, resume_text)
+    summary_written = False
+    skills_written = False
+    interest_written = False
+
+    for paragraph in document.paragraphs:
+        text = normalize_text(paragraph.text)
+        normalized = _normalize_heading(text)
+        if normalized in SUMMARY_HEADINGS:
+            current_section = "PROFILE"
+            continue
+        if normalized in SKILLS_HEADINGS:
+            current_section = "SKILLS"
+            continue
+        if normalized in INTEREST_HEADINGS:
+            current_section = "INTERESTS"
+            continue
+        if normalized in EXPERIENCE_HEADINGS:
+            current_section = "EXPERIENCE"
+            continue
+        if normalized in PROJECT_HEADINGS:
+            current_section = "PROJECTS"
+            continue
+        if normalized in EDUCATION_HEADINGS:
+            current_section = "EDUCATION"
+            continue
+        if normalized in LEADERSHIP_HEADINGS:
+            current_section = "LEADERSHIP"
+            continue
+        if normalized in LANGUAGE_HEADINGS:
+            current_section = "LANGUAGES"
+            continue
+
+        if current_section == "PROFILE" and not summary_written and text:
+            _set_paragraph_text(paragraph, summary)
+            summary_written = True
+            continue
+        if current_section == "SKILLS" and not skills_written and text:
+            _set_paragraph_text(paragraph, skills_text or text)
+            skills_written = True
+            continue
+        if current_section == "INTERESTS" and not interest_written and text:
+            _set_paragraph_text(paragraph, interest_line or text)
+            interest_written = True
+            continue
+        if current_section in {"EXPERIENCE", "PROJECTS"} and text:
+            if _looks_like_bullet_content(text) or paragraph.style.name.startswith("List"):
+                _set_paragraph_text(paragraph, _polish_bullet(text, analysis))
+            elif _looks_like_role_fragment(text) or _is_role_or_date_line(SourceLine(text=text, style_name=paragraph.style.name)):
+                _set_paragraph_text(paragraph, _clean_heading_line(text))
+            continue
+        if current_section == "EDUCATION" and text:
+            continue
+        if current_section == "LEADERSHIP" and text:
+            continue
+
+
+def _set_paragraph_text(paragraph: Paragraph, text: str) -> None:
+    if paragraph.runs:
+        paragraph.runs[0].text = text
+        for run in paragraph.runs[1:]:
+            run.text = ""
+        return
+    paragraph.add_run(text)
+
+
 def _parse_docx_resume(document: DocxDocument) -> ParsedResume:
     header: list[SourceLine] = []
     sections: list[SourceSection] = []
     current: SourceSection | None = None
 
     for paragraph in document.paragraphs:
-        text = normalize_text(paragraph.text)
-        if not text:
-            continue
-        line = SourceLine(text=text, style_name=paragraph.style.name, is_bullet=_is_bullet_paragraph(paragraph))
-        if _looks_like_heading(text):
-            current = SourceSection(heading=_display_heading(text), style_name=paragraph.style.name, lines=[])
-            sections.append(current)
-            continue
-        if current is None:
-            header.append(line)
-        else:
-            current.lines.append(line)
+        for text, is_heading in _split_docx_paragraph_text(paragraph.text):
+            text = normalize_text(text)
+            if not text:
+                continue
+            line = SourceLine(text=text, style_name=paragraph.style.name, is_bullet=_is_bullet_paragraph(paragraph))
+            if is_heading or _looks_like_heading(text):
+                current = SourceSection(heading=_display_heading(text), style_name=paragraph.style.name, lines=[])
+                sections.append(current)
+                continue
+            if current is None:
+                header.append(line)
+            else:
+                current.lines.append(line)
 
     return ParsedResume(header=header, sections=sections)
+
+
+def _split_docx_paragraph_text(text: str) -> list[tuple[str, bool]]:
+    cleaned = normalize_text(text)
+    if not cleaned:
+        return []
+    heading_names = sorted(
+        {
+            *SECTION_HEADINGS,
+            *SUMMARY_HEADINGS,
+            *SKILLS_HEADINGS,
+            *PROJECT_HEADINGS,
+            *INTEREST_HEADINGS,
+            *LEADERSHIP_HEADINGS,
+            *LANGUAGE_HEADINGS,
+        },
+        key=len,
+        reverse=True,
+    )
+    pattern = re.compile(
+        "|".join(rf"(?<!\w){re.escape(name)}(?!\w)" for name in heading_names),
+        re.IGNORECASE,
+    )
+    parts: list[tuple[str, bool]] = []
+    last = 0
+    for match in pattern.finditer(cleaned):
+        before = cleaned[last:match.start()].strip(" -:\n\t")
+        if before:
+            parts.append((before, False))
+        parts.append((match.group(0).strip(), True))
+        last = match.end()
+    tail = cleaned[last:].strip(" -:\n\t")
+    if tail:
+        parts.append((tail, False))
+    return parts or [(cleaned, False)]
 
 
 def _parse_text_resume(lines: list[str], header: list[str]) -> ParsedResume:

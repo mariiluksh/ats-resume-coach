@@ -61,6 +61,7 @@ class ResumeRewriterTest(unittest.TestCase):
 
         resume = "\n".join(paragraph.text for paragraph in source_doc.paragraphs)
         analysis = ResumeAnalyzer().analyze(job, resume)
+        before_styles = [paragraph.style.name for paragraph in source_doc.paragraphs]
         draft = build_resume_draft(
             job,
             resume,
@@ -70,19 +71,22 @@ class ResumeRewriterTest(unittest.TestCase):
         )
         rewritten = Document(BytesIO(draft.data))
         rewritten_text = "\n".join(paragraph.text for paragraph in rewritten.paragraphs)
+        after_styles = [paragraph.style.name for paragraph in rewritten.paragraphs]
 
         self.assertEqual(draft.filename, "jane_resume_tailored.docx")
+        self.assertEqual(len(rewritten.paragraphs), len(source_doc.paragraphs))
+        self.assertEqual(after_styles, before_styles)
         self.assertIn("Jane Doe", rewritten_text)
         self.assertIn("Built the original portfolio API", rewritten_text)
         self.assertIn("BS Computer Science, University of Leeds", rewritten_text)
-        self.assertIn("PROFILE", rewritten_text)
+        self.assertIn("Profile", rewritten_text)
         self.assertNotIn("Hard-working student seeking an opportunity.", rewritten_text)
         self.assertNotIn("Tailored Resume Draft", rewritten_text)
         self.assertEqual(rewritten.paragraphs[0].style.name, "Title")
         self.assertIn("BS Computer Science student at University of Leeds", rewritten_text)
-        headings = [paragraph.text for paragraph in rewritten.paragraphs if paragraph.text.isupper()]
-        self.assertLess(headings.index("EDUCATION"), headings.index("EXPERIENCE"))
-        self.assertLess(headings.index("TECHNICAL SKILLS"), headings.index("PROFESSIONAL INTERESTS"))
+        paragraphs_by_text = [paragraph.text for paragraph in rewritten.paragraphs]
+        self.assertLess(paragraphs_by_text.index("Experience"), paragraphs_by_text.index("Education"))
+        self.assertLess(paragraphs_by_text.index("Technical Skills"), paragraphs_by_text.index("Professional Interests"))
 
     def test_pdf_filename_is_preserved_as_tailored_name(self) -> None:
         job = "Software engineering intern using Python SQL communication."
