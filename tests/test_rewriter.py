@@ -4,6 +4,7 @@ from io import BytesIO
 import unittest
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from ats_resume_coach.analyzer import ResumeAnalyzer
 from ats_resume_coach.rewriter import build_resume_draft
@@ -26,6 +27,14 @@ class ResumeRewriterTest(unittest.TestCase):
         self.assertEqual(draft.content_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         self.assertTrue(draft.data.startswith(b"PK"))
         self.assertIn("PROFILE", draft.preview_text)
+
+        rewritten = Document(BytesIO(draft.data))
+        self.assertEqual(rewritten.paragraphs[0].alignment, WD_ALIGN_PARAGRAPH.CENTER)
+        self.assertTrue(rewritten.paragraphs[2].runs[0].bold)
+        self.assertTrue(rewritten.paragraphs[2].runs[0].font.size.pt >= 10)
+        bullet_paragraph = next(paragraph for paragraph in rewritten.paragraphs if "processed 1000 records" in paragraph.text)
+        self.assertIsNotNone(bullet_paragraph.paragraph_format.left_indent)
+        self.assertIsNotNone(bullet_paragraph.paragraph_format.first_line_indent)
 
     def test_docx_rewrite_preserves_source_document(self) -> None:
         job = "Software engineering intern using Python FastAPI SQL Git testing communication."

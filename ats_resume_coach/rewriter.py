@@ -8,7 +8,9 @@ from pathlib import Path
 import re
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.document import Document as DocxDocument
+from docx.shared import Inches, Pt
 from docx.text.paragraph import Paragraph
 
 from .schemas import AnalysisResult
@@ -190,15 +192,21 @@ def build_resume_draft(
     draft_text = "\n".join(draft_lines).strip() + "\n"
 
     document = Document()
+    _apply_resume_document_formatting(document)
     for section in _build_doc_sections(draft_lines):
         heading, entries = section
+        if heading == "Header":
+            for index, entry in enumerate(entries):
+                role = "name" if index == 0 else "contact"
+                _add_doc_paragraph(document, entry, "Normal", role=role)
+            continue
         if heading != "Header":
-            document.add_heading(heading, level=1)
+            _add_doc_paragraph(document, heading, "Heading 1", role="section_heading")
         for entry in entries:
             if entry.startswith("- "):
-                document.add_paragraph(entry[2:], style="List Bullet")
+                _add_doc_paragraph(document, entry[2:], "List Bullet", role="bullet")
             else:
-                document.add_paragraph(entry)
+                _add_doc_paragraph(document, entry, "Normal", role="body")
 
     buffer = BytesIO()
     document.save(buffer)
@@ -283,6 +291,7 @@ def _build_style_preserving_docx(
     analysis: AnalysisResult,
 ) -> DraftResult:
     document = Document(BytesIO(source_docx))
+    _apply_resume_document_formatting(document)
     parsed = _parse_docx_resume(document)
     styles = _resume_styles(document, parsed)
     summary = _build_profile(parsed, analysis, job_text, resume_text)
@@ -620,7 +629,8 @@ def _section_text_lines(
     resume_text: str,
 ) -> list[str]:
     styles = ResumeStyles("Normal", "Normal", "Heading 1", "Normal", "Normal", "List Bullet")
-    return [line.text for line in _section_docx_lines(section, output_heading, styles, analysis, job_text, resume_text)]
+    output_lines = _section_docx_lines(section, output_heading, styles, analysis, job_text, resume_text)
+    return [f"- {line.text}" if line.is_bullet else line.text for line in output_lines]
 
 
 def _section_docx_lines(
@@ -763,22 +773,25 @@ def _clear_document_body(document: DocxDocument) -> None:
 def _write_header(document: DocxDocument, parsed: ParsedResume, styles: ResumeStyles) -> None:
     for index, line in enumerate(parsed.header):
         style = styles.name if index == 0 else styles.contact
-        _add_doc_paragraph(document, line.text, style)
+        role = "name" if index == 0 else "contact"
+        _add_doc_paragraph(document, line.text, style, role=role)
 
 
 def _write_section(document: DocxDocument, heading: str, lines: list[SourceLine], styles: ResumeStyles) -> None:
     if not lines:
         return
-    _add_doc_paragraph(document, heading, styles.section_heading)
+    _add_doc_paragraph(document, heading, styles.section_heading, role="section_heading")
     for line in lines:
         style = styles.bullet if line.is_bullet else line.style_name or styles.body
-        _add_doc_paragraph(document, line.text, style)
+        role = "bullet" if line.is_bullet else ("item_heading" if style == styles.item_heading else "body")
+        _add_doc_paragraph(document, line.text, style, role=role)
 
 
-def _add_doc_paragraph(document: DocxDocument, text: str, style_name: str | None) -> Paragraph:
+def _add_doc_paragraph(document: DocxDocument, text: str, style_name: str | None, *, role: str = "body") -> Paragraph:
     paragraph = document.add_paragraph()
     _apply_style(paragraph, style_name)
-    paragraph.add_run(text)
+    run = paragraph.add_run(text)
+    _format_doc_paragraph(paragraph, run, role=role)
     return paragraph
 
 
@@ -797,6 +810,85 @@ def _style_exists(document: DocxDocument, style_name: str) -> bool:
     except KeyError:
         return False
     return True
+
+
+def _apply_resume_document_formatting(document: DocxDocument) -> None:
+    for section in document.sections:
+        section.top_margin = Inches(0.55)
+        section.bottom_margin = Inches(0.55)
+        section.left_margin = Inches(0.6)
+        section.right_margin = Inches(0.6)
+
+    _set_style_font(document, "Normal", name="Aptos", size=Pt(10))
+    _set_style_font(document, "Title", name="Aptos", size=Pt(14), bold=True)
+    _set_style_font(document, "Heading 1", name="Aptos", size=Pt(10.5), bold=True)
+    if _style_exists(document, "List Bullet"):
+        _set_style_font(document, "List Bullet", name="Aptos", size=Pt(10))
+
+
+def _set_style_font(
+    document: DocxDocument,
+    style_name: str,
+    *,
+    name: str | None = None,
+    size: Pt | None = None,
+    bold: bool | None = None,
+) -> None:
+    try:
+        style = document.styles[style_name]
+    except KeyError:
+        return
+    if name:
+        style.font.name = name
+    if size is not None:
+        style.font.size = size
+    if bold is not None:
+        style.font.bold = bold
+
+
+def _format_doc_paragraph(paragraph: Paragraph, run, *, role: str) -> None:
+    paragraph_format = paragraph.paragraph_format
+    if role == "name":
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.space_after = Pt(1)
+        run.bold = True
+        run.font.size = Pt(14)
+        run.font.name = "Aptos"
+    elif role == "contact":
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.space_after = Pt(2)
+        run.font.size = Pt(9)
+        run.font.name = "Aptos"
+    elif role == "section_heading":
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        paragraph_format.space_before = Pt(8)
+        paragraph_format.space_after = Pt(2)
+        run.bold = True
+        run.font.size = Pt(10.5)
+        run.font.name = "Aptos"
+    elif role == "item_heading":
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        paragraph_format.space_before = Pt(2)
+        paragraph_format.space_after = Pt(0)
+        run.bold = True
+        run.font.size = Pt(10)
+        run.font.name = "Aptos"
+    elif role == "bullet":
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        paragraph_format.left_indent = Inches(0.25)
+        paragraph_format.first_line_indent = Inches(-0.18)
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.space_after = Pt(0)
+        run.font.size = Pt(10)
+        run.font.name = "Aptos"
+    else:
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        paragraph_format.space_before = Pt(0)
+        paragraph_format.space_after = Pt(0)
+        run.font.size = Pt(10)
+        run.font.name = "Aptos"
 
 
 def _is_bullet_paragraph(paragraph: Paragraph) -> bool:
