@@ -111,6 +111,17 @@ STOPWORDS = {
     "years",
     "you",
     "your",
+    "citadel",
+    "commodities",
+    "portfolio",
+    "manager",
+    "managers",
+    "capital",
+    "opportunities",
+    "world",
+    "available",
+    "strong",
+    "use",
 }
 
 TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+#.\-]{1,}")

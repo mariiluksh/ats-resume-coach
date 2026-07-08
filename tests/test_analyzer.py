@@ -61,6 +61,21 @@ class ResumeAnalyzerTest(unittest.TestCase):
         self.assertTrue(all("Jane" not in (item.current or "") for item in replace_items))
         self.assertTrue(all("Education" not in (item.current or "") for item in replace_items))
 
+    def test_job_headline_terms_are_not_promoted_as_noise(self) -> None:
+        job = "Citadel commodities portfolio manager using Python analysis communication."
+        resume = """
+        Jane jane@example.com
+        Education
+        BS Computer Science
+        Skills
+        Python, SQL, communication
+        """
+
+        result = ResumeAnalyzer().analyze(job, resume)
+        self.assertNotIn("citadel", result.missing_keywords)
+        self.assertNotIn("commodities", result.missing_keywords)
+        self.assertNotIn("portfolio", result.missing_keywords)
+
 
 if __name__ == "__main__":
     unittest.main()
