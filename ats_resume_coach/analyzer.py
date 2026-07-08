@@ -428,7 +428,7 @@ class ResumeAnalyzer:
                 )
             )
         else:
-            for bullet in extract_bullet_like_lines(resume_text)[:3]:
+            for bullet in self._rewrite_candidates(resume_text)[:3]:
                 if self._has_weak_phrase(bullet) or len(tokenize(bullet)) < 8 or not has_metric(bullet):
                     items.append(
                         EditPlanItem(
@@ -461,6 +461,37 @@ class ResumeAnalyzer:
                 )
             )
         return items
+
+    def _rewrite_candidates(self, resume_text: str) -> list[str]:
+        candidates = []
+        seen = set()
+        for bullet in extract_bullet_like_lines(resume_text):
+            normalized = normalize_for_match(bullet)
+            if not re.match(r"^[-*•◦‣]\s+", bullet.strip()):
+                continue
+            if has_email(bullet) or has_phone(bullet):
+                continue
+            if len(tokenize(bullet)) < 6:
+                continue
+            if any(
+                heading in normalized
+                for heading in (
+                    "education",
+                    "experience",
+                    "projects",
+                    "skills",
+                    "summary",
+                    "profile",
+                    "additional information",
+                    "work experience",
+                )
+            ):
+                continue
+            if bullet.lower() in seen:
+                continue
+            candidates.append(bullet)
+            seen.add(bullet.lower())
+        return candidates
 
     def _model_signals(self, *, job_text: str, resume_text: str) -> dict[str, Any] | None:
         if not self.local_model:

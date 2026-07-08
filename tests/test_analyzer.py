@@ -44,7 +44,23 @@ class ResumeAnalyzerTest(unittest.TestCase):
         self.assertIn("intern positioning", categories)
         self.assertIn("python", result.missing_skills["programming"])
 
+    def test_edit_plan_skips_headers_and_section_labels(self) -> None:
+        job = "Commodities portfolio manager using Python risk analysis communication."
+        resume = """
+        Jane jane@example.com github.com/jane
+        Education
+        BS Computer Science
+        Projects
+        - Built an API with Python and SQL that processed 1000 records.
+        """
+
+        result = ResumeAnalyzer().analyze(job, resume)
+        replace_items = [item for item in result.edit_plan if item.action == "replace"]
+
+        self.assertLessEqual(len(replace_items), 1)
+        self.assertTrue(all("Jane" not in (item.current or "") for item in replace_items))
+        self.assertTrue(all("Education" not in (item.current or "") for item in replace_items))
+
 
 if __name__ == "__main__":
     unittest.main()
-
