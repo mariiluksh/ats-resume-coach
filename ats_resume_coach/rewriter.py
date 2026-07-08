@@ -63,6 +63,13 @@ class ResumeStyles:
     bullet: str
 
 
+@dataclass(frozen=True)
+class ResumeDraftContent:
+    lines: list[str]
+    summary: str
+    skill_lines: list[str]
+
+
 DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 SECTION_HEADINGS = {
     "education",
@@ -177,6 +184,7 @@ def build_resume_draft(
 ) -> DraftResult:
     job_text = normalize_text(job_text)
     resume_text = _merge_wrapped_lines(normalize_text(resume_text))
+    content = _build_resume_content(job_text, resume_text, analysis)
     if source_docx:
         return _build_style_preserving_docx(
             source_docx=source_docx,
@@ -184,16 +192,14 @@ def build_resume_draft(
             job_text=job_text,
             resume_text=resume_text,
             analysis=analysis,
+            content=content,
         )
 
-    lines = extract_lines(resume_text)
-
-    draft_lines = _build_text_draft(lines, job_text, resume_text, analysis)
-    draft_text = "\n".join(draft_lines).strip() + "\n"
+    draft_text = "\n".join(content.lines).strip() + "\n"
 
     document = Document()
     _apply_resume_document_formatting(document)
-    for section in _build_doc_sections(draft_lines):
+    for section in _build_doc_sections(content.lines):
         heading, entries = section
         if heading == "Header":
             for index, entry in enumerate(entries):
@@ -211,7 +217,6 @@ def build_resume_draft(
     buffer = BytesIO()
     document.save(buffer)
 
-    filename = _draft_filename(analysis)
     return DraftResult(
         filename=_source_or_draft_filename(source_filename, analysis),
         content_type=DOCX_CONTENT_TYPE,
@@ -222,6 +227,14 @@ def build_resume_draft(
 
 def build_resume_draft_preview(job_text: str, resume_text: str, analysis: AnalysisResult) -> str:
     return build_resume_draft(job_text, resume_text, analysis).preview_text
+
+
+def _build_resume_content(job_text: str, resume_text: str, analysis: AnalysisResult) -> ResumeDraftContent:
+    lines = extract_lines(resume_text)
+    draft_lines = _build_text_draft(lines, job_text, resume_text, analysis)
+    summary = next((line for line in draft_lines if line.startswith("Candidate") or line.startswith("BS ") or line.startswith("MEng ")), "")
+    skill_lines = [line for line in draft_lines if line.startswith("Programming:") or line.startswith("Technologies:") or line.startswith("Data & Analytics:") or line.startswith("Tools:") or line.startswith("Cloud:") or line.startswith("Professional:")]
+    return ResumeDraftContent(lines=draft_lines, summary=summary, skill_lines=skill_lines)
 
 
 def _build_text_draft(
@@ -290,12 +303,12 @@ def _build_style_preserving_docx(
     job_text: str,
     resume_text: str,
     analysis: AnalysisResult,
+    content: ResumeDraftContent,
 ) -> DraftResult:
     document = Document(BytesIO(source_docx))
     parsed = _parse_docx_resume(document)
-    summary = _build_profile(parsed, analysis, job_text, resume_text)
-    preview_lines = ["Preserved source DOCX structure with tailored content.", "PROFILE", summary]
-    _rewrite_docx_in_place(document, parsed, analysis, job_text, resume_text, summary)
+    preview_lines = ["Preserved source DOCX structure with tailored content.", "PROFILE", content.summary]
+    _rewrite_docx_in_place(document, parsed, analysis, job_text, resume_text, content)
 
     buffer = BytesIO()
     document.save(buffer)
@@ -314,12 +327,11 @@ def _rewrite_docx_in_place(
     analysis: AnalysisResult,
     job_text: str,
     resume_text: str,
-    summary: str,
+    content: ResumeDraftContent,
 ) -> None:
     del parsed  # structure is preserved by paragraph order; parsing is only used for summary generation
     current_section = ""
-    skills_lines = _build_skill_lines(analysis, resume_text)
-    skills_text = " | ".join(skills_lines)
+    skills_text = " | ".join(content.skill_lines) if content.skill_lines else ""
     interest_line = _build_interest_line(job_text, resume_text)
     summary_written = False
     skills_written = False
@@ -354,7 +366,7 @@ def _rewrite_docx_in_place(
             continue
 
         if current_section == "PROFILE" and not summary_written and text:
-            _set_paragraph_text(paragraph, summary)
+            _set_paragraph_text(paragraph, content.summary)
             summary_written = True
             continue
         if current_section == "SKILLS" and not skills_written and text:
